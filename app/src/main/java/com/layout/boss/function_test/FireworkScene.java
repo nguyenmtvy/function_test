@@ -36,7 +36,7 @@ enum DucAnimationState{
 
 class Misc {
     public static boolean isDebugging = false;
-    public static int backgroundColor = Color.BLACK;
+    public static int backgroundColor = Color.WHITE;
     public static int screenHeight;
     public static int screenWidth;
 
@@ -44,27 +44,46 @@ class Misc {
     //Timing
     public static long minDuration = 2000;
     public static long maxDuration = 3000;
-    public static int minFragment = 40;
-    public static int maxFragment = 60;
-    public static float minfireworkRadius = 7;
-    public static float maxFireworkRadius = 12.0f;    //Radius of the firework in pixel
+    public static int minFragment = 50;
+    public static int maxFragment = 100;
+    public static float minFireworkRadius = 20;
+    public static float maxFireworkRadius = 30;    //Radius of the firework in pixel
     //Coordination
-        //Min and max possible spawn and target positions
+        //Min and colorMax possible spawn and target positions
     public static int minX;
     public static int minY;
     public static int maxX;
     public static int maxY;
+
+    //Color stuff
+        //Contrast to white: 100 -> 150
+    public static int colorMin = 100;
+    public static int colorMax = 170;
+    public static int colorRange = colorMax - colorMin;
 
     public static void CalculateBoundary(int width, int height){
         screenHeight = height;
         screenWidth = width;
 
         minX = (int) (screenWidth * 0.3f);
-        minY = (int) (screenHeight * 0.2f);
+        minY = (int) (screenHeight * 0.1f);
         maxX = (int) (screenWidth * 0.7f);
-        maxY = (int) (screenHeight * 0.8f);
+        maxY = (int) (screenHeight * 0.5f);
     }
-    //Check whether 2 coord are near each other within acceptable range
+
+    //Scale number from one col orRange to another
+    public static float MapRange(float unscaledNum, float minAllowed, float maxAllowed, float min, float max) {
+        return (maxAllowed - minAllowed) * (unscaledNum - min) / (max - min) + minAllowed;
+    }
+    //Random color
+    public static int RandomColor(Random random){
+        int red = random.nextInt() % colorRange + colorMin;
+        int blue = random.nextInt() % colorRange + colorMin;
+        int green = random.nextInt() % colorRange + colorMin;
+        return Color.rgb(red, green, blue);
+    }
+
+    //Check whether 2 coord are near each other within acceptable colorRange
     public static boolean Near(int parm1, int parm2, int epsilon){
         return Math.abs(parm1 - parm2) <= epsilon ? true : false;
     }
@@ -108,15 +127,28 @@ class Misc {
         }
         return c*t/d + b;
     }
+    static public double EaseInQuint(float t, float b, float c, float d){
+        if (t >= d){
+            return c + b;
+        }
+        t /= d;
+        return c*Math.pow(t, 4) + b;
+    }
+    static public double EaseOutQuint(float t, float b, float c, float d){
+        if (t >= d){
+            return c + b;
+        }
+        t /= d;
+        t--;
+        return c*(t*t*t*t*t + 1) + b;
+    }
 }
 
 class Firework{
 
     //Basic info
-    private long fireworkDuration = 2000;    //How long does it take for the firework to get to the destination? In millisecond
+    private long fireworkDuration = 1500;    //How long does it take for the firework to get to the destination? In millisecond
     private float radius = 5;
-    private int minExplodeRadius = 7;           //Minimum explosion radius
-    private int maxExplodeRadius = 150;         //Maximum explosion radius
     private int color;
     public DucAnimationState state = DucAnimationState.Idling;
     private Random random;
@@ -135,7 +167,7 @@ class Firework{
         random = new Random();
         fragmentList = new Fragment[Misc.maxFragment];
         for(int indx = 0; indx < fragmentList.length; indx++){
-            fragmentList[indx] = new Fragment();
+            fragmentList[indx] = new Fragment(random);
         }
     }
 
@@ -149,12 +181,12 @@ class Firework{
         this.startTime = System.currentTimeMillis();
         this.radius = radius;
 
-        int red = ( int )( random.nextFloat() * 128 ) + 128;
-        int blue = ( int )( random.nextFloat() * 128 ) + 128;
-        int green = ( int )( random.nextFloat() * 128 ) + 128;
+//        int red = ( int )( random.nextFloat() * 128 ) + 128;
+//        int blue = ( int )( random.nextFloat() * 128 ) + 128;
+//        int green = ( int )( random.nextFloat() * 128 ) + 128;
 
-        //Alpha is always at max
-        color = Color.rgb(red, green, blue);
+        //Alpha is always at colorMax
+        color = Misc.RandomColor(random);
 
         //FOR DEBUGGING PURPOSE
         //Coordination
@@ -171,13 +203,10 @@ class Firework{
         state = DucAnimationState.Exploding;
 
         for(int indx = 0; indx < numberOfFragment; indx++){
-            int endX = centerX + (random.nextInt(2) % 2 * 2 - 1) * //either 1 or -1
-                    (random.nextInt(maxExplodeRadius - minExplodeRadius) + minExplodeRadius);
-            int endY = centerY + (random.nextInt(2) % 2 * 2 - 1) * //either 1 or -1
-                    (random.nextInt(maxExplodeRadius - minExplodeRadius) + minExplodeRadius);
-            long duration = (long) ((random.nextLong() % (Misc.maxFragment - Misc.minDuration) + Misc.minDuration) * 0.8f);
-            float radius = (random.nextFloat() % (Misc.maxFireworkRadius - minExplodeRadius) + Misc.minfireworkRadius) * 0.5f;
-            fragmentList[indx].StartFragment(centerX, centerY, endX, endY, radius, duration);
+            long duration = (long) ((random.nextLong() % (Misc.maxFragment - Misc.minDuration) + Misc.minDuration) * 0.2f);
+            float radius = this.radius * (Misc.MapRange(random.nextFloat(), 0.2f, 0.5f, 0, 1));
+            //float radius = this.radius * 0.3f;
+            fragmentList[indx].StartFragment(centerX, centerY, radius, duration);
         }
     }
 
@@ -198,10 +227,10 @@ class Firework{
                 paint.setColor(color);
 
                 long curTime = System.currentTimeMillis() - startTime;
-                float nextX = (float) Misc.EaseOutCubic(curTime, startX, endX - startX, fireworkDuration);
-                float nextY = (float) Misc.EaseOutCubic(curTime, startY, endY - startY, fireworkDuration);
+                float nextX = (float) Misc.LinearTween(curTime, startX, endX - startX, fireworkDuration);
+                float nextY = (float) Misc.EaseOutQuint(curTime, startY, endY - startY, fireworkDuration);
 
-                if ((Misc.Near((int) nextX, endX, 20) == true && Misc.Near((int) nextY, endY, 20) == true) || curTime > fireworkDuration){
+                if ((Misc.Near((int) nextX, endX, 100) == true && Misc.Near((int) nextY, endY, 20) == true) || curTime > fireworkDuration){
                     paint.setColor(Misc.backgroundColor);
                     Explode((int) nextX, (int) nextY);
                 }
@@ -214,7 +243,7 @@ class Firework{
                 }
 
                 if (CheckFreeFragments() == true){
-                    //All fragment fxinish moving
+                    //All fragment finish moving
                     state = DucAnimationState.Done;
                     numberOfFragment = 0;
                 }
@@ -224,65 +253,107 @@ class Firework{
 }
 
 class Fragment{
+    //Credit to: https://codepen.io/rajatkantinandi/pen/bQNedV
+    class Vector2D{
+        int x;
+        int y;
+        Vector2D(int x, int y){
+            this.x = x;
+            this.y = y;
+        }
+
+        public void Add(Vector2D force){
+            x += force.x;
+            y += force.y;
+        }
+        public void Mult(float parm){
+            x *= parm;
+            y *= parm;
+        }
+    }
+
     //Basic info
     public DucAnimationState state = DucAnimationState.Done;
-    private int startX = 0;
-    private int startY = 0;
-    private int endX = 0;
-    private int endY = 0;
+
+    private Vector2D vel;           //Velocity of the fragment
+    private Vector2D acc;           //Acceleration of the fragment
+    private Vector2D pos;           //Current position
+    private int lifeSpan = 255;     //Life span of the fragment <=> fragment's alpha
 
     private float radius = 2;
     private long duration = 0;
     private long startTime = 0;
 
     private int color;
-    private int red;
-    private int green;
-    private int blue;
-
     private Random random;
 
-    public Fragment(){
-        random = new Random();
+    //Trailing
+    private LinkedList<Vector2D> trailList;
+    private int maxTrail = 10;
+
+    public Fragment(Random random){
+        this.random = random;
+        trailList = new LinkedList<>();
+        acc = new Vector2D(0, 1);  //Gravity!
     }
 
-    public void StartFragment(int startX, int startY, int endX, int endY, float radius, long duration){
-        this.startX = startX;
-        this.startY = startY;
-        this.endX = endX;
-        this.endY = endY;
+    public void StartFragment(int startX, int startY, float radius, long duration){
+        pos = new Vector2D(startX, startY);
+        vel = new Vector2D((random.nextInt(50) + 3) * (random.nextInt(2) * 2 - 1),
+                           (random.nextInt(50) + 3) * (random.nextInt(2) * 2 - 1));
 
         this.radius = radius;
         this.duration = duration;
 
         this.startTime = System.currentTimeMillis();
 
-        red = ( int )( random.nextFloat() * 128 ) + 128;
-        blue = ( int )( random.nextFloat() * 128 ) + 128;
-        green = ( int )( random.nextFloat() * 128 ) + 128;
+//        red = ( int )( random.nextFloat() * 128 ) + 128;
+//        blue = ( int )( random.nextFloat() * 128 ) + 128;
+//        green = ( int )( random.nextFloat() * 128 ) + 128;
 
-        //Alpha is always at max
-        color = Color.rgb(red, green, blue);
+        //Alpha is always at colorMax
+        color = Misc.RandomColor(random);
+
+        //Reset the trail list
+        trailList.clear();
 
         state = DucAnimationState.Moving;
     }
     public void doDraw(Canvas canvas, Paint paint){
         switch(state) {
             case Moving:
+                vel.Mult(0.85f);    //Slow down
+                vel.Add(acc);   //Add acceleration vector to velocity vector
+                pos.Add(vel);   //Add velocity vector to position vector
+
                 //Simple, draw a circle until we reach destination :D
                 long curTime = System.currentTimeMillis() - startTime;
-                float nextAlpha = (float) Misc.LinearTween(curTime, 255, -255, duration);
+                lifeSpan = (int) Misc.LinearTween(curTime, 255, -255, duration);
                 paint.setColor(color);
-                paint.setAlpha((int) nextAlpha);
+                paint.setAlpha(lifeSpan);
 
-                float nextX = (float) Misc.EaseOutCubic(curTime, startX, endX - startX, duration);
-                float nextY = (float) Misc.EaseOutCubic(curTime, startY, endY - startY, duration);
+                canvas.drawCircle(pos.x, pos.y, radius, paint);
 
-                if (((nextX == endX && nextY == endY) || curTime > duration) && nextAlpha <= 0) {
-                    state = DucAnimationState.Done;
+                //Draw trail
+                int curAlpha = lifeSpan;
+                float curRadius = radius;
+                //Since each trail will get smaller and more transparent, we need a magic number to exponentially so that the last trail is nearly invisible
+                double magicNumber = Math.pow(0.9f, 1.0f / trailList.size());
+                for(int indx = 0; indx < trailList.size(); indx++){
+                    paint.setAlpha(curAlpha *= magicNumber);
+                    System.out.println(curAlpha);
+                    Vector2D trailPos = trailList.get(indx);
+                    canvas.drawCircle(trailPos.x, trailPos.y, curRadius *= magicNumber, paint);
                 }
 
-                canvas.drawCircle(nextX, nextY, radius, paint);
+                trailList.addFirst(pos);
+                if (trailList.size() > maxTrail){
+                    trailList.removeLast();
+                }
+
+                if (curTime >= duration || lifeSpan <= 0) {
+                    state = DucAnimationState.Done;
+                }
                 break;
         }
     }
@@ -336,9 +407,9 @@ public class FireworkScene extends SurfaceView implements  SurfaceHolder.Callbac
         private void StartFirework(Firework firework){
             //Randomize stuff
             long duration = Math.abs(random.nextLong() % (Misc.maxDuration - Misc.minDuration)) + Misc.minDuration;
-            float radius = random.nextFloat() % (Misc.maxFireworkRadius - Misc.minfireworkRadius) + Misc.minfireworkRadius;
-            //Since at first, when the view has not been fully initialized, all the max and min width and height are 0
-            //  therefore, we need to + 1 to make the range [0, bound) works ( [0, 0) will break the program!)
+            float radius = random.nextFloat() * (Misc.maxFireworkRadius - Misc.minFireworkRadius) + Misc.minFireworkRadius;
+            //Since at first, when the view has not been fully initialized, all the colorMax and colorMin width and height are 0
+            //  therefore, we need to + 1 to make the colorRange [0, bound) works ( [0, 0) will break the program!)
             int targetX = random.nextInt(Misc.maxX - (Misc.minX == 0 ? -1 : Misc.minX)) + Misc.minX;
             int targetY = random.nextInt(Misc.maxY - (Misc.minY == 0 ? -1 : Misc.minY)) + Misc.minY;
 
