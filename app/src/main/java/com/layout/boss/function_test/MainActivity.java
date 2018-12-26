@@ -119,7 +119,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.celebrate_fireworks);
         correct_number = findViewById(R.id.correct_number);
         correct_number.setText("Your correct answer: " + Integer.toString(correctNumber));
-        FireworkLayout firework = new FireworkLayout(this);
+//        FireworkLayout firework = new FireworkLayout(this);
+//        RelativeLayout surface = findViewById( R.id.surface );
+//        surface.addView( firework );
+
+        FireworkScene firework = new FireworkScene(this);
         RelativeLayout surface = findViewById( R.id.surface );
         surface.addView( firework );
     }

@@ -133,7 +133,7 @@ class Fireworks
      */
     public int MaxRocketNumber = 9;
     /**
-     * Controls "energy" of firwork explosion. Default value 850.
+     * Controls "energy" of firework explosion. Default value 850.
      */
     public int MaxRocketExplosionEnergy = 950;
     /**
@@ -334,53 +334,53 @@ public class FireworkLayout extends SurfaceView implements SurfaceHolder.Callbac
 
     @SuppressLint( "HandlerLeak" )
     public FireworkLayout( Context context )
-    {
-        super( context );
-
-        SurfaceHolder holder = getHolder();
-        holder.addCallback( this );
-
-        getHolder().addCallback( this );
-
-        thread = new GameThread( holder, context, new Handler() {
-            @Override
-            public void handleMessage( Message m ) {
-
-            }} );
-
-        setFocusable( true );
-    }
-
-    @Override
-    public void surfaceChanged( SurfaceHolder holder, int format, int width, int height )
-    {
-        thread.setSurfaceSize( width, height );
-    }
-
-    @Override
-    public void surfaceCreated( SurfaceHolder holder )
-    {
-        thread.setRunning( true );
-        thread.doStart();
-        thread.start();
-    }
-
-    @Override
-    public void surfaceDestroyed( SurfaceHolder holder )
-    {
-        boolean retry = true;
-        thread.setRunning( false );
-
-        while ( retry )
         {
-            try
-            {
-                thread.join();
-                retry = false;
-            }
-            catch ( InterruptedException e )
-            {
-            }
+            super( context );
+
+            SurfaceHolder holder = getHolder();
+            holder.addCallback( this );
+
+            getHolder().addCallback( this );
+
+            thread = new GameThread( holder, context, new Handler() {
+                @Override
+                public void handleMessage( Message m ) {
+
+                }} );
+
+            setFocusable( true );
         }
+
+        @Override
+        public void surfaceChanged( SurfaceHolder holder, int format, int width, int height )
+        {
+            thread.setSurfaceSize( width, height );
+        }
+
+        @Override
+        public void surfaceCreated( SurfaceHolder holder )
+        {
+            thread.setRunning( true );
+            thread.doStart();
+            thread.start();
+        }
+
+        @Override
+        public void surfaceDestroyed( SurfaceHolder holder )
+        {
+            boolean retry = true;
+            thread.setRunning( false );
+
+            while ( retry )
+            {
+                try
+                {
+                    thread.join();
+                    retry = false;
+                }
+                catch ( InterruptedException e )
+                {
+                }
+            }
     }
 }
