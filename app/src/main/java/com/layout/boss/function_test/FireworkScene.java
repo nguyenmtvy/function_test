@@ -1,6 +1,7 @@
 package com.layout.boss.function_test;
 import java.util.LinkedList;
 import java.util.Random;
+import java.util.Vector;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -22,7 +23,6 @@ enum DucFireworkSceneAnimateState {
 enum DucAnimationState{
     Idling, Moving, Exploding, Done
 }
-
 //IDEA:
     /*
     We represent the firework as a circle
@@ -56,10 +56,13 @@ class Misc {
     static Vector2D minPos;
     static Vector2D maxPos;
 
+    //Fragment stuff
+    static int minRotationSpeed = 4;
+    static int maxRotationSpeed = 9;
+
     //Color stuff
-        //Contrast to white: 100 -> 150
     private static int colorMin = 100;
-    private static int colorMax = 170;
+    private static int colorMax = 205;
     private static int colorRange = colorMax - colorMin;
 
     static void CalculateBoundary(int width, int height){
@@ -195,8 +198,87 @@ class Vector2D{
     }
 }
 
-class Firework{
+class FireworkGun{
+    private int maxNumberOfFirework = 20;
+    private LinkedList<Firework> freeFireworkList;  //List of free fireworks
+    private LinkedList<Firework> shotFireworkList;  //List of shot fireworks
+    private long timer;                             //We shoot firework on periodically
+    private long fireworkInterval = 1500;
+    private Random random;
 
+    private Fragment[] fragmentList;      //Explosion from gun
+    private LinkedList<Fragment> workingFragment;
+
+    FireworkGun(){
+        //Initialize
+        random = new Random();
+        freeFireworkList = new LinkedList<>();
+        shotFireworkList = new LinkedList<>();
+        for(int indx = 0; indx < maxNumberOfFirework; indx++){
+            //Add a bunch of firework
+            freeFireworkList.add(new Firework(random));
+        }
+
+//        fragmentList = new Fragment[Misc.maxFragment];
+//        workingFragment = new LinkedList<>();
+//        for(int indx = 0; indx < Misc.maxFragment; indx++){
+//            //Explode into a bunch of fragment
+//            fragmentList[indx] = new Fragment(random);
+//        }
+        timer = System.currentTimeMillis();
+    }
+
+    private void StartFirework(Firework firework){
+        Vector2D startPos = new Vector2D(random.nextInt((int) (Misc.maxPos.x - (Misc.maxPos.x == 0 ? -1 : Misc.minPos.x))) + Misc.minPos.x,
+                                        Misc.screenHeight);
+//        //And explode at gun point
+//        int numberOfFragment = random.nextInt(Misc.maxFragment == Misc.minFragment ? 1 : Misc.maxFragment - Misc.minFragment) + Misc.minFragment / 9;
+//        for(int indx = 0; indx < numberOfFragment; indx++){
+//            float fragRadius = (random.nextFloat() * (Misc.maxFireworkRadius - Misc.minFireworkRadius) + Misc.minFireworkRadius)
+//                    * (Misc.MapRange(random.nextFloat(), 0.2f, 0.5f, 0, 1));
+//            fragmentList[indx].StartFragment(startPos, fragRadius, Color.argb(255, 210, 0, 0));
+//            workingFragment.add(fragmentList[indx]);
+//        }
+
+        firework.StartFirework(startPos);
+    }
+    void Update(Canvas canvas, Paint paint){
+        //Each fireworkInterval millisecond, shoot another firework
+        if (System.currentTimeMillis() - timer >= fireworkInterval && freeFireworkList.size() > 0){
+            //Shoot the next free firework if available
+            StartFirework(freeFireworkList.getFirst());
+            shotFireworkList.add(freeFireworkList.removeFirst());
+
+            timer = System.currentTimeMillis();
+        }
+
+        //Redraw all the firework
+//        for(Firework firework : shotFireworkList){
+//            firework.Update(canvas, paint);
+//        }
+
+//        for(int indx = workingFragment.size() - 1; indx >= 0; indx--){
+//            Fragment fragment = workingFragment.get(indx);
+//            if (fragment.state != DucAnimationState.Done){
+//                fragment.Update(canvas, paint);
+//            } else {
+//                 workingFragment.remove(indx);
+//            }
+//        }
+
+        //Redraw and Check for free firework
+        for(int indx = shotFireworkList.size() - 1; indx >= 0; indx--){
+            Firework firework = shotFireworkList.get(indx);
+            if (firework.state == DucAnimationState.Done){
+                firework.state = DucAnimationState.Idling;
+                freeFireworkList.add(shotFireworkList.remove(indx));
+            } else {
+                firework.Update(canvas, paint);
+            }
+        }
+    }
+}
+class Firework{
     //Basic info
     private long fireworkDuration = 1500;    //How long does it take for the firework to get to the destination? In millisecond
     private float radius = 5;
@@ -212,15 +294,20 @@ class Firework{
     private Fragment[] fragmentList;
     private int numberOfFragment;
 
-    Firework(){
-        random = new Random();
+    //Some trailing
+    private LinkedList<Vector2D> trailHistory;
+    private int maxTrail = 20;
+
+    Firework(Random random){
+        this.random = random;
         fragmentList = new Fragment[Misc.maxFragment];
+        trailHistory = new LinkedList<>();
         for(int indx = 0; indx < fragmentList.length; indx++){
             fragmentList[indx] = new Fragment(random);
         }
     }
 
-    void StartFirework(){
+    void StartFirework(Vector2D startPos){
         //Randomize stuff
         this.fireworkDuration = Math.abs(random.nextLong() % (Misc.maxDuration - Misc.minDuration)) + Misc.minDuration;
         this.radius = random.nextFloat() * (Misc.maxFireworkRadius - Misc.minFireworkRadius) + Misc.minFireworkRadius;
@@ -231,8 +318,7 @@ class Firework{
 
         //startPos.x is randomize between 2 x boundary of the screen
         //startPos.y is at the bottom of the screen
-        this.startPos = new Vector2D(random.nextInt((int) (Misc.maxPos.x - (Misc.maxPos.x == 0 ? -1 : Misc.minPos.x))) + Misc.minPos.x,
-                                       Misc.screenHeight);
+        this.startPos = startPos;
         this.endPos = new Vector2D(targetX, targetY);
         this.startTime = System.currentTimeMillis();
 
@@ -246,6 +332,7 @@ class Firework{
             this.radius = 5;
         }
 
+        trailHistory.clear();
         //Start moving
         state = DucAnimationState.Moving;
     }
@@ -255,8 +342,7 @@ class Firework{
 
         for(int indx = 0; indx < numberOfFragment; indx++){
             float radius = this.radius * (Misc.MapRange(random.nextFloat(), 0.2f, 0.5f, 0, 1));
-            //float radius = this.radius * 0.3f;
-            fragmentList[indx].StartFragment(new Vector2D(centerX, centerY), radius);
+            fragmentList[indx].StartFragment(new Vector2D(centerX, centerY), radius, null);
         }
     }
 
@@ -269,8 +355,12 @@ class Firework{
         }
         return true;
     }
+    private void DrawShape(Canvas canvas, Paint paint, Vector2D pos, int alpha, float radius){
+        paint.setAlpha(alpha);
+        canvas.drawCircle(pos.x, pos.y, radius, paint);
+    }
 
-    void doDraw(Canvas canvas, Paint paint){
+    void Update(Canvas canvas, Paint paint){
         switch(state){
             case Moving:
                 //Simple, draw a line until we reach destination :D
@@ -280,16 +370,27 @@ class Firework{
                 float nextX = (float) Misc.LinearTween(curTime, startPos.x, endPos.x - startPos.x, fireworkDuration);
                 float nextY = (float) Misc.EaseOutQuint(curTime, startPos.y, endPos.y - startPos.y, fireworkDuration);
 
+                int curAlpha = 255;
+                float curRadius = radius;
+                for(Vector2D trail: trailHistory){
+                    DrawShape(canvas, paint, trail, curAlpha *= 0.6f, curRadius *= 0.8f);
+                }
+                trailHistory.addFirst(new Vector2D(nextX, nextY));
+                if (trailHistory.size() > maxTrail){
+                    trailHistory.removeLast();
+                }
+
                 if ((Misc.Near(nextX, endPos.x, 100) && Misc.Near(nextY, endPos.y, 20)) || curTime > fireworkDuration){
                     paint.setColor(Misc.backgroundColor);
                     Explode(nextX, nextY);
                 }
 
-                canvas.drawCircle(nextX, nextY, radius, paint);
+                DrawShape(canvas, paint, new Vector2D(nextX, nextY), 255, radius);
+                //canvas.drawCircle(nextX, nextY, radius, paint);
                 break;
             case Exploding:
                 for (int indx = 0; indx < numberOfFragment; indx++) {
-                    fragmentList[indx].doDraw(canvas, paint);
+                    fragmentList[indx].Update(canvas, paint);
                 }
 
                 if (CheckFreeFragments()){
@@ -301,7 +402,6 @@ class Firework{
         }
     }
 }
-
 class Fragment{
     //Credit to: https://codepen.io/rajatkantinandi/pen/bQNedV
     //Basic info
@@ -328,6 +428,7 @@ class Fragment{
     }
     private Shape curShape;
     private float curRotation;              //Current rotation of the shape
+    private float rotationSpeed = 7;        //Angle / second
     private Vector2D[] baseVertexList;
 
     Fragment(Random random){
@@ -336,26 +437,32 @@ class Fragment{
         baseVertexList = new Vector2D[4];//{new Vector2D(0, 0), new Vector2D(0, 0), new Vector2D(0, 0), new Vector2D(0, 0)};
     }
 
-    void StartFragment(Vector2D startPos, float radius){
+    void StartFragment(Vector2D startPos, float radius, Integer color){
         pos = startPos;
-//        vel = new Vector2D((random.nextInt(50) + 3) * (random.nextInt(2) * 2 - 1),
-//                           (random.nextInt(50) + 3) * (random.nextInt(2) * 2 - 1));
         vel = new Vector2D(random.nextFloat() * 2 - 1, random.nextFloat() * 2 - 1);     //Normalized vector for direction
-        vel.Mult(random.nextInt(61) + 10);                                       //Multiply by the length
+        vel.Mult(random.nextInt(81) + 30);                                       //Multiply by the length
+        rotationSpeed = random.nextInt(Misc.maxRotationSpeed - Misc.minRotationSpeed) + Misc.minRotationSpeed;
 
         this.radius = radius;
-        this.duration = (long) ((random.nextLong() % (Misc.maxFragment - Misc.minDuration) + Misc.minDuration) * 0.2f);
+        this.duration = (long) ((random.nextLong() % (Misc.maxFragment - Misc.minDuration) + Misc.minDuration) * 0.5f);
 
         this.startTime = System.currentTimeMillis();
 
         //Alpha is always at colorMax
-        color = Misc.RandomColor(random);
+        if (color == null){
+            this.color = Misc.RandomColor(random);
+        } else {
+            this.color = color;
+        }
 
         //Randomize shape that will be drawn
         curShape = Shape.GetRandomShape(random);
         curRotation = 0;
 
         switch (curShape){
+            case Circle:
+                this.radius *= 1.3f;
+                break;
             case Triangle:
                 this.radius *= 2.5f; //Scale up a little bit
 
@@ -381,79 +488,11 @@ class Fragment{
     private void DrawCircle(Canvas canvas, Paint paint){
         canvas.drawCircle(pos.x, pos.y, radius, paint);
     }
-    private void DrawTriangle(Canvas canvas, Paint paint){
-        //Draw a equilateral using the current location as its center. The pos served as the triangle centroid
-
-        Vector2D curPos[] = new Vector2D[]{
-                new Vector2D(baseVertexList[0].x, baseVertexList[0].y),
-                new Vector2D(baseVertexList[1].x, baseVertexList[1].y),
-                new Vector2D(baseVertexList[2].x, baseVertexList[2].y)};
-        //Rotate the previous triangle
-        curPos[0].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-        curPos[1].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-        curPos[2].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-
-        //Then translate it
-        curPos[0].Add(pos);
-        curPos[1].Add(pos);
-        curPos[2].Add(pos);
-
-        //And draw it out!
-        paint.setStrokeWidth(2);
-        paint.setStyle(Paint.Style.FILL_AND_STROKE);
-        paint.setAntiAlias(true);
-
-        Path path = new Path();
-        path.setFillType(Path.FillType.EVEN_ODD);
-        path.moveTo(curPos[0].x, curPos[0].y);
-        path.lineTo(curPos[1].x, curPos[1].y);
-        path.lineTo(curPos[2].x, curPos[2].y);
-        path.lineTo(curPos[0].x, curPos[0].y);
-
-        canvas.drawPath(path, paint);
-    }
-    private void DrawSquare(Canvas canvas, Paint paint){
-        //Draw square where the center of the square is the curPos
-        //  and the radius is the half length of the diagonal line
-
-        Vector2D curPos[] = new Vector2D[]{
-                new Vector2D(baseVertexList[0].x, baseVertexList[0].y),
-                new Vector2D(baseVertexList[1].x, baseVertexList[1].y),
-                new Vector2D(baseVertexList[2].x, baseVertexList[2].y),
-                new Vector2D(baseVertexList[3].x, baseVertexList[3].y)};
-        //Rotate the previous triangle
-        curPos[0].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-        curPos[1].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-        curPos[2].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-        curPos[3].Mult(Vector2D.GetStandardRotationMatrix(curRotation));
-
-        //Then translate it
-        curPos[0].Add(pos);
-        curPos[1].Add(pos);
-        curPos[2].Add(pos);
-        curPos[3].Add(pos);
-
-        //And draw it out!
-        paint.setStrokeWidth(2);
-        paint.setStyle(Paint.Style.FILL_AND_STROKE);
-        paint.setAntiAlias(true);
-
-        Path path = new Path();
-        path.setFillType(Path.FillType.EVEN_ODD);
-        path.moveTo(curPos[0].x, curPos[0].y);
-        path.lineTo(curPos[1].x, curPos[1].y);
-        path.lineTo(curPos[2].x, curPos[2].y);
-        path.lineTo(curPos[3].x, curPos[3].y);
-        path.lineTo(curPos[0].x, curPos[0].y);
-
-        canvas.drawPath(path, paint);
-    }
     private void DrawShape(Canvas canvas, Paint paint, int point){
         //Set up the canvas and paint
-        paint.setStrokeWidth(2);
-        paint.setStyle(Paint.Style.FILL_AND_STROKE);
-        paint.setAntiAlias(true);
-
+//        paint.setStrokeWidth(2);
+//        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+//        paint.setAntiAlias(true);
         Path path = new Path();
         path.setFillType(Path.FillType.EVEN_ODD);
 
@@ -484,7 +523,7 @@ class Fragment{
         canvas.drawPath(path, paint);
     }
 
-    void doDraw(Canvas canvas, Paint paint){
+    void Update(Canvas canvas, Paint paint){
         switch(state) {
             case Moving:
                 vel.Mult(0.85f);    //Slow down
@@ -498,7 +537,7 @@ class Fragment{
                 paint.setColor(color);
                 paint.setAlpha(lifeSpan);
 
-                curRotation += 3;
+                curRotation += rotationSpeed;
                 switch(curShape){
                     case Circle:
                         DrawCircle(canvas, paint);
@@ -519,10 +558,6 @@ class Fragment{
     }
 }
 
-class FireworkGun{
-
-}
-
 public class FireworkScene extends SurfaceView implements  SurfaceHolder.Callback {
     class GameThread extends Thread
     {
@@ -534,11 +569,7 @@ public class FireworkScene extends SurfaceView implements  SurfaceHolder.Callbac
         private Handler handler;
         private Paint paint;
 
-        private int maxNumberOfFirework = 20;
-        LinkedList<Firework> freeFireworkList;  //List of free fireworks
-        LinkedList<Firework> shotFireworkList;  //List of shot fireworks
-        private long timer;                             //We shoot firework on periodically
-        private long fireworkInterval = 1500;
+        private FireworkGun mGun;
 
         GameThread( SurfaceHolder surfaceHolder, Context context, Handler handler )
         {
@@ -547,26 +578,15 @@ public class FireworkScene extends SurfaceView implements  SurfaceHolder.Callbac
             this.handler = handler;
 
             Misc.CalculateBoundary(getWidth(), getHeight());
-
-            //Initialize
-            freeFireworkList = new LinkedList<>();
-            shotFireworkList = new LinkedList<>();
-            for(int indx = 0; indx < maxNumberOfFirework; indx++){
-                //Add a bunch of firework
-                freeFireworkList.add(new Firework());
-            }
-            timer = System.currentTimeMillis();
             Misc.ResetBackgroundAlpha();
 
             paint = new Paint();
             paint.setStrokeWidth( 2 / getResources().getDisplayMetrics().density );
-            //paint.setColor( Color.TRANSPARENT );
             paint.setColor(Color.BLACK);
+            paint.setStyle(Paint.Style.FILL_AND_STROKE);
             paint.setAntiAlias( true );
-        }
 
-        private void StartFirework(Firework firework){
-            firework.StartFirework();
+            mGun = new FireworkGun();
         }
 
         //Overwrite stuff
@@ -633,26 +653,7 @@ public class FireworkScene extends SurfaceView implements  SurfaceHolder.Callbac
         {
             canvas.drawColor(Misc.backgroundColor);
 
-            //Each fireworkInterval millisecond, shoot another firework
-            if (System.currentTimeMillis() - timer >= fireworkInterval && freeFireworkList.size() > 0){
-                //Shoot the next free firework if available
-                StartFirework(freeFireworkList.getFirst());
-                shotFireworkList.add(freeFireworkList.removeFirst());
-                timer = System.currentTimeMillis();
-            }
-
-            //Redraw all the firework
-            for(Firework firework : shotFireworkList){
-                firework.doDraw(canvas, paint);
-            }
-
-            //Check for free firework
-            for(int indx = shotFireworkList.size() - 1; indx >= 0; indx--){
-                if (shotFireworkList.get(indx).state == DucAnimationState.Done){
-                    shotFireworkList.get(indx).state = DucAnimationState.Idling;
-                    freeFireworkList.add(shotFireworkList.remove(indx));
-                }
-            }
+            mGun.Update(canvas, paint);
         }
 
         void setSurfaceSize( int width, int height )
